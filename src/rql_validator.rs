@@ -81,7 +81,7 @@ impl RqlValidator {
                 operator = "".to_owned();
                 operator_content.pop();
 
-                if 0 == operator_content.len() {
+                if operator_content.is_empty() {
                     continue;
                 }
                 let last = result
@@ -97,31 +97,29 @@ impl RqlValidator {
     fn is_operators_valid(&self, operators: Vec<(String, Option<String>, usize, usize)>) -> bool {
         for x in operators.iter() {
             let (node, inner_value, level, nested_quantity) = x;
-            if false
-                == match node.as_str() {
-                    //(field1,value1)
-                    "eq" | "ge" | "gt" | "le" | "lt" | "ne" => 0 == *nested_quantity,
+            if !(match node.as_str() {
+                //(field1,value1)
+                "eq" | "ge" | "gt" | "le" | "lt" | "ne" => 0 == *nested_quantity,
 
-                    //(field1)
-                    "eqf" | "eqt" | "eqn" | "ie" => {
-                        0 == *nested_quantity
-                            && inner_value.is_some()
-                            && 0 == inner_value
-                                .as_ref()
-                                .expect("We checked before")
-                                .matches(',')
-                                .count()
-                    }
-
-                    //(field1,(value1,value2))
-                    "in" | "out" => 1 == *nested_quantity,
-                    //(node1)
-                    "not" => 1 == *nested_quantity,
-                    //(node1,node2)
-                    "and" | "or" => 2 == *nested_quantity,
-                    _ => inner_value.is_some() && level > &1,
+                //(field1)
+                "eqf" | "eqt" | "eqn" | "ie" => {
+                    0 == *nested_quantity
+                        && inner_value.is_some()
+                        && 0 == inner_value
+                            .as_ref()
+                            .expect("We checked before")
+                            .matches(',')
+                            .count()
                 }
-            {
+
+                //(field1,(value1,value2))
+                "in" | "out" => 1 == *nested_quantity,
+                //(node1)
+                "not" => 1 == *nested_quantity,
+                //(node1,node2)
+                "and" | "or" => 2 == *nested_quantity,
+                _ => inner_value.is_some() && level > &1,
+            }) {
                 //println!("{:#?}", operators);
                 return false;
             }
@@ -137,7 +135,7 @@ impl RqlValidator {
         operators
             .iter()
             .map(|x: &(String, Option<String>, usize)| {
-                return if x.1.is_none() {
+                if x.1.is_none() {
                     let target_level = x.2 + 1;
                     let mut count_nested = 0;
                     for x in operators.iter() {
@@ -149,7 +147,7 @@ impl RqlValidator {
                     (x.0.clone(), x.1.clone(), x.2, count_nested)
                 } else {
                     (x.0.clone(), x.1.clone(), x.2, 0usize)
-                };
+                }
             })
             .collect()
     }
