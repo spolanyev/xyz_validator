@@ -1,7 +1,7 @@
 //@author Stanislav Polaniev <spolanyev@gmail.com>
 
-use xyz_validator::interfaces::validator_interface::ValidatorInterface;
-use xyz_validator::rql_validator::RqlValidator;
+use xyz_validator::RqlValidator;
+use xyz_validator::ValidatorInterface;
 
 fn main() {
     let rql_validator: Box<dyn ValidatorInterface> = Box::new(RqlValidator::new());
