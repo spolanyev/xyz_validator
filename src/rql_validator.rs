@@ -1,3 +1,5 @@
+//@author Stanislav Polaniev <spolanyev@gmail.com>
+
 use crate::interfaces::validator_interface::ValidatorInterface;
 use std::collections::HashMap;
 
@@ -13,7 +15,7 @@ impl ValidatorInterface for RqlValidator {
 }
 
 impl RqlValidator {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {}
     }
 

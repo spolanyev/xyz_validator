@@ -1,1 +1,1 @@
-pub(crate) mod validator_interface;
+pub mod validator_interface;
