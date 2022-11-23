@@ -3,11 +3,14 @@
 use crate::interfaces::validator_interface::ValidatorInterface;
 use std::collections::HashMap;
 
-pub struct RqlValidator {}
+pub struct RqlValidator {
+    closing_parts: HashMap<char, char>,
+    opening_parts: HashMap<char, char>,
+}
 
 impl ValidatorInterface for RqlValidator {
     fn is_valid(&self, data: String) -> bool {
-        if !self.is_parentheses_matched(data.clone()) {
+        if !self.is_parentheses_matched(data.as_str()) {
             return false;
         }
         self.is_operators_valid(self.add_nested_nodes_quantity(self.get_operators(data)))
@@ -16,24 +19,24 @@ impl ValidatorInterface for RqlValidator {
 
 impl RqlValidator {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            closing_parts: HashMap::from([('(', ')')]),
+            opening_parts: HashMap::from([(')', '(')]),
+        }
     }
 
-    fn is_parentheses_matched(&self, string: String) -> bool {
-        let closing_parts = HashMap::from([('(', ')')]);
-        let opening_parts = HashMap::from([(')', '(')]);
-
+    fn is_parentheses_matched(&self, rql_statement: &str) -> bool {
         let mut stack = vec![];
 
-        for char in string.chars() {
+        for char in rql_statement.chars() {
             //opening detected
-            if let Some(closing_part) = closing_parts.get(&char) {
+            if let Some(closing_part) = self.closing_parts.get(&char) {
                 stack.push(closing_part);
                 continue;
             }
 
             //closing detected
-            if opening_parts.get(&char).is_some() {
+            if self.opening_parts.get(&char).is_some() {
                 if stack.pop() != Some(&char) {
                     return false;
                 }
@@ -47,10 +50,7 @@ impl RqlValidator {
         false
     }
 
-    fn get_operators(&self, string: String) -> Vec<(String, Option<String>, usize)> {
-        let closing_parts = HashMap::from([('(', ')')]);
-        let opening_parts = HashMap::from([(')', '(')]);
-
+    fn get_operators(&self, rql_statement: String) -> Vec<(String, Option<String>, usize)> {
         let mut result: Vec<(String, Option<String>, usize)> = vec![];
 
         let mut is_inside_parentheses = false;
@@ -58,9 +58,9 @@ impl RqlValidator {
         let mut operator_content = "".to_owned();
         let mut level: usize = 0;
 
-        for char in string.chars() {
+        for char in rql_statement.chars() {
             //opening detected
-            if closing_parts.get(&char).is_some() {
+            if self.closing_parts.get(&char).is_some() {
                 level += 1;
                 is_inside_parentheses = true;
                 result.push((operator, None, level));
@@ -78,7 +78,7 @@ impl RqlValidator {
             }
 
             //closing detected
-            if opening_parts.get(&char).is_some() {
+            if self.opening_parts.get(&char).is_some() {
                 level -= 1;
                 operator = "".to_owned();
                 operator_content.pop();

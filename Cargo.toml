@@ -1,10 +1,14 @@
 [package]
 name = "xyz_validator"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Stanislav Polaniev"]
-license = "MIT OR Apache-2.0"
 edition = "2021"
-description = "A set of validators. Currently Resource Query Language (RQL) validator is implemented."
+description = "A set of validators. Currently, only Resource Query Language (RQL) validator is implemented."
+readme = "CRATES.IO.md"
+repository = "https://github.com/spolanyev/xyz_validator"
+license = "MIT OR Apache-2.0"
+keywords = ["xyz_validator", "rql", "validation"]
+categories = ["web-programming", "parser-implementations"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

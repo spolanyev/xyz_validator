@@ -4,4 +4,4 @@ My Resource Query Language (RQL) validator published on [crates.io](https://crat
 
 # Contacts
 
-Feel free to contact me at [spolanyev@gmail.com](mailto:spolanyev@gmail.com?subject=Rust%3A%20crate)
+Feel free to contact me at [spolanyev@gmail.com](mailto:spolanyev@gmail.com?subject=Rust%3A%20crates)

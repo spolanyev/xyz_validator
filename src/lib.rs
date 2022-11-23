@@ -3,8 +3,7 @@
 //!  Basic usage:
 //!
 //!  ```
-//! use xyz_validator::RqlValidator;
-//! use xyz_validator::ValidatorInterface;
+//! use xyz_validator::{RqlValidator, ValidatorInterface};
 //!
 //! fn main() {
 //!     //Check if RQL statement is valid
