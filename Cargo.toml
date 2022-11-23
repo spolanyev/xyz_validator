@@ -1,6 +1,6 @@
 [package]
 name = "xyz_validator"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Stanislav Polaniev"]
 edition = "2021"
 description = "A set of validators. Currently, only Resource Query Language (RQL) validator is implemented."
