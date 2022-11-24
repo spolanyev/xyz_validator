@@ -6,6 +6,7 @@ use std::collections::HashMap;
 pub struct RqlValidator {
     closing_parts: HashMap<char, char>,
     opening_parts: HashMap<char, char>,
+    verbosity_manager: Option<fn(&str)>,
 }
 
 impl ValidatorInterface for RqlValidator {
@@ -18,10 +19,17 @@ impl ValidatorInterface for RqlValidator {
 }
 
 impl RqlValidator {
-    pub fn new() -> Self {
+    pub fn new(verbosity_manager: Option<fn(&str)>) -> Self {
         Self {
             closing_parts: HashMap::from([('(', ')')]),
             opening_parts: HashMap::from([(')', '(')]),
+            verbosity_manager,
+        }
+    }
+
+    fn process_error_message(&self, message: &str) {
+        if self.verbosity_manager.is_some() {
+            self.verbosity_manager.expect("We checked it already")(message);
         }
     }
 
@@ -38,6 +46,7 @@ impl RqlValidator {
             //closing detected
             if self.opening_parts.get(&char).is_some() {
                 if stack.pop() != Some(&char) {
+                    self.process_error_message("Invalid closing parentheses count");
                     return false;
                 }
             }
@@ -46,7 +55,7 @@ impl RqlValidator {
         if stack.is_empty() {
             return true;
         }
-
+        self.process_error_message("Invalid opening parentheses count");
         false
     }
 
@@ -100,28 +109,72 @@ impl RqlValidator {
         for x in operators.iter() {
             let (node, inner_value, level, nested_quantity) = x;
             if !(match node.as_str() {
-                //(field1,value1)
-                "eq" | "ge" | "gt" | "le" | "lt" | "ne" => 0 == *nested_quantity,
-
-                //(field1)
-                "eqf" | "eqt" | "eqn" | "ie" => {
-                    0 == *nested_quantity
-                        && inner_value.is_some()
-                        && 0 == inner_value
-                            .as_ref()
-                            .expect("We checked before")
-                            .matches(',')
-                            .count()
+                //eq(field1,value1)
+                "eq" | "ge" | "gt" | "le" | "lt" | "ne" => {
+                    if !{ 0 == *nested_quantity } {
+                        self.process_error_message(
+                            format!("Node '{}' should not have nested parentheses", node).as_str(),
+                        );
+                        return false;
+                    }
+                    true
                 }
 
-                //(field1,(value1,value2))
-                "in" | "out" => 1 == *nested_quantity,
-                //(node1)
-                "not" => 1 == *nested_quantity,
-                //(node1,node2)
-                "and" | "or" => 2 == *nested_quantity,
+                //eqf(field1)
+                "eqf" | "eqt" | "eqn" | "ie" => {
+                    if !{
+                        0 == *nested_quantity
+                            && inner_value.is_some()
+                            && 0 == inner_value
+                                .as_ref()
+                                .expect("We checked before")
+                                .matches(',')
+                                .count()
+                    } {
+                        self.process_error_message(
+                            format!("Node '{}' should not have nested parentheses, must contain a field, the field should not contain a comma", node).as_str(),
+                        );
+                        return false;
+                    }
+                    true
+                }
+
+                //in(field1,(value1,value2))
+                "in" | "out" => {
+                    if !{ 1 == *nested_quantity } {
+                        self.process_error_message(
+                            format!("Node '{}' should have 1 nested parentheses block", node)
+                                .as_str(),
+                        );
+                        return false;
+                    }
+                    true
+                }
+                //not(node1)
+                "not" => {
+                    if !{ 1 == *nested_quantity } {
+                        self.process_error_message(
+                            format!("Node '{}' should have 1 nested node", node).as_str(),
+                        );
+                        return false;
+                    }
+                    true
+                }
+                //and(node1,node2)
+                "and" | "or" => {
+                    if !{ 2 == *nested_quantity } {
+                        self.process_error_message(
+                            format!("Node '{}' should have 2 nested nodes", node).as_str(),
+                        );
+                        return false;
+                    }
+                    true
+                }
                 _ => inner_value.is_some() && level > &1,
             }) {
+                self.process_error_message(
+                    format!("Block '{}' should have a value and be nested", node).as_str(),
+                );
                 //println!("{:#?}", operators);
                 return false;
             }
@@ -161,7 +214,7 @@ mod test {
 
     #[test]
     fn check_parentheses() {
-        let rql_validator = RqlValidator::new();
+        let rql_validator = RqlValidator::new(None);
 
         let rql_statement = "eq(name,John)".to_owned();
         assert!(rql_validator.is_valid(rql_statement));
@@ -175,7 +228,7 @@ mod test {
 
     #[test]
     fn get_operators() {
-        let rql_validator = RqlValidator::new();
+        let rql_validator = RqlValidator::new(None);
 
         let rql_statement = "eq(name,John)".to_owned();
         let expected = vec![("eq".to_owned(), Some("name,John".to_owned()), 1)];
@@ -202,7 +255,7 @@ mod test {
 
     #[test]
     fn add_nested_quantity() {
-        let rql_validator = RqlValidator::new();
+        let rql_validator = RqlValidator::new(None);
 
         let rql_statement = "eq(name,John)".to_owned();
         let expected = vec![("eq".to_owned(), Some("name,John".to_owned()), 1, 0)];
@@ -243,19 +296,17 @@ mod test {
 
     #[test]
     fn check_is_operators_valid() {
-        let rql_validator = RqlValidator::new();
+        let rql_validator = RqlValidator::new(None);
         let rql_statement = "not(in(name,(John,Jackson,Liam)))".to_owned();
         let result =
             rql_validator.add_nested_nodes_quantity(rql_validator.get_operators(rql_statement));
-
-        println!("{:#?}", result);
 
         assert!(rql_validator.is_operators_valid(result));
     }
 
     #[test]
     fn test_valid() {
-        let rql_validator = RqlValidator::new();
+        let rql_validator = RqlValidator::new(None);
 
         let rql_statement = "not(in(name,(John,Jackson,Liam)))".to_owned();
         assert!(rql_validator.is_valid(rql_statement));
@@ -308,7 +359,11 @@ mod test {
 
     #[test]
     fn test_not_valid() {
-        let rql_validator = RqlValidator::new();
+        fn print_errors(error_message: &str) {
+            eprintln!("{}", error_message);
+        }
+
+        let rql_validator = RqlValidator::new(Some(print_errors));
 
         let rql_statement = "in(name,John,Jackson,Liam)".to_owned();
         assert!(!rql_validator.is_valid(rql_statement));
