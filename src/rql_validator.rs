@@ -11,10 +11,14 @@ pub struct RqlValidator {
 
 impl ValidatorInterface for RqlValidator {
     fn is_valid(&self, data: String) -> bool {
-        if !self.is_parentheses_matched(data.as_str()) {
-            return false;
-        }
-        self.is_operators_valid(self.add_nested_nodes_quantity(self.get_operators(data)))
+        let operators = match self.get_operators(data) {
+            Ok(operators) => operators,
+            Err(error_message) => {
+                self.process_error_message(error_message);
+                return false;
+            }
+        };
+        self.is_operators_valid(self.add_nested_nodes_quantity(operators))
     }
 }
 
@@ -33,34 +37,13 @@ impl RqlValidator {
         }
     }
 
-    fn is_parentheses_matched(&self, rql_statement: &str) -> bool {
-        let mut stack = vec![];
-
-        for char in rql_statement.chars() {
-            //opening detected
-            if let Some(closing_part) = self.closing_parts.get(&char) {
-                stack.push(closing_part);
-                continue;
-            }
-
-            //closing detected
-            if self.opening_parts.get(&char).is_some() {
-                if stack.pop() != Some(&char) {
-                    self.process_error_message("Invalid closing parentheses count");
-                    return false;
-                }
-            }
-        }
-
-        if stack.is_empty() {
-            return true;
-        }
-        self.process_error_message("Invalid opening parentheses count");
-        false
-    }
-
-    fn get_operators(&self, rql_statement: String) -> Vec<(String, Option<String>, usize)> {
+    fn get_operators(
+        &self,
+        rql_statement: String,
+    ) -> Result<Vec<(String, Option<String>, usize)>, &str> {
         let mut result: Vec<(String, Option<String>, usize)> = vec![];
+
+        let mut stack = vec![];
 
         let mut is_inside_parentheses = false;
         let mut operator = "".to_owned();
@@ -69,7 +52,8 @@ impl RqlValidator {
 
         for char in rql_statement.chars() {
             //opening detected
-            if self.closing_parts.get(&char).is_some() {
+            if let Some(closing_part) = self.closing_parts.get(&char) {
+                stack.push(closing_part);
                 level += 1;
                 is_inside_parentheses = true;
                 result.push((operator, None, level));
@@ -88,6 +72,9 @@ impl RqlValidator {
 
             //closing detected
             if self.opening_parts.get(&char).is_some() {
+                if stack.pop() != Some(&char) {
+                    return Err("Invalid closing parentheses count");
+                }
                 level -= 1;
                 operator = "".to_owned();
                 operator_content.pop();
@@ -102,7 +89,12 @@ impl RqlValidator {
                 operator_content = "".to_owned();
             }
         }
-        result
+
+        if !stack.is_empty() {
+            return Err("Invalid opening parentheses count");
+        }
+
+        Ok(result)
     }
 
     fn is_operators_valid(&self, operators: Vec<(String, Option<String>, usize, usize)>) -> bool {
@@ -232,7 +224,10 @@ mod test {
 
         let rql_statement = "eq(name,John)".to_owned();
         let expected = vec![("eq".to_owned(), Some("name,John".to_owned()), 1)];
-        assert_eq!(expected, rql_validator.get_operators(rql_statement));
+        assert_eq!(
+            expected,
+            rql_validator.get_operators(rql_statement).unwrap()
+        );
 
         let rql_statement = "or(and(eq(name,John),eq(surname,Smith)),eq(surname,Doe))".to_owned();
         let expected = vec![
@@ -242,7 +237,10 @@ mod test {
             ("eq".to_owned(), Some("surname,Smith".to_owned()), 3),
             ("eq".to_owned(), Some("surname,Doe".to_owned()), 2),
         ];
-        assert_eq!(expected, rql_validator.get_operators(rql_statement));
+        assert_eq!(
+            expected,
+            rql_validator.get_operators(rql_statement).unwrap()
+        );
 
         let rql_statement = "not(in(name,(John,Jackson,Liam)))".to_owned();
         let expected = vec![
@@ -250,7 +248,10 @@ mod test {
             ("in".to_owned(), None, 2),
             ("name".to_owned(), Some("John,Jackson,Liam".to_owned()), 3),
         ];
-        assert_eq!(expected, rql_validator.get_operators(rql_statement));
+        assert_eq!(
+            expected,
+            rql_validator.get_operators(rql_statement).unwrap()
+        );
     }
 
     #[test]
@@ -261,7 +262,8 @@ mod test {
         let expected = vec![("eq".to_owned(), Some("name,John".to_owned()), 1, 0)];
         assert_eq!(
             expected,
-            rql_validator.add_nested_nodes_quantity(rql_validator.get_operators(rql_statement))
+            rql_validator
+                .add_nested_nodes_quantity(rql_validator.get_operators(rql_statement).unwrap())
         );
 
         let rql_statement = "or(and(eq(name,John),eq(surname,Smith)),eq(surname,Doe))".to_owned();
@@ -274,7 +276,8 @@ mod test {
         ];
         assert_eq!(
             expected,
-            rql_validator.add_nested_nodes_quantity(rql_validator.get_operators(rql_statement))
+            rql_validator
+                .add_nested_nodes_quantity(rql_validator.get_operators(rql_statement).unwrap())
         );
 
         let rql_statement = "not(in(name,(John,Jackson,Liam)))".to_owned();
@@ -290,7 +293,8 @@ mod test {
         ];
         assert_eq!(
             expected,
-            rql_validator.add_nested_nodes_quantity(rql_validator.get_operators(rql_statement))
+            rql_validator
+                .add_nested_nodes_quantity(rql_validator.get_operators(rql_statement).unwrap())
         );
     }
 
@@ -298,8 +302,8 @@ mod test {
     fn check_is_operators_valid() {
         let rql_validator = RqlValidator::new(None);
         let rql_statement = "not(in(name,(John,Jackson,Liam)))".to_owned();
-        let result =
-            rql_validator.add_nested_nodes_quantity(rql_validator.get_operators(rql_statement));
+        let result = rql_validator
+            .add_nested_nodes_quantity(rql_validator.get_operators(rql_statement).unwrap());
 
         assert!(rql_validator.is_operators_valid(result));
     }
