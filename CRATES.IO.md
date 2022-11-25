@@ -10,7 +10,7 @@ Implemented:
 
 * Comparison
   - eq(property,value)
-  - nq(property,value)
+  - ne(property,value)
   - lt(property,value)
   - gt(property,value)
   - le(property,value)
