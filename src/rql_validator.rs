@@ -82,6 +82,7 @@ impl RqlValidator {
                 if operator_content.is_empty() {
                     continue;
                 }
+
                 let last = result
                     .last_mut()
                     .expect("We have at least an operator before the value");
@@ -97,88 +98,6 @@ impl RqlValidator {
         Ok(result)
     }
 
-    fn is_operators_valid(&self, operators: Vec<(String, Option<String>, usize, usize)>) -> bool {
-        for x in operators.iter() {
-            let (node, inner_value, level, nested_quantity) = x;
-            if !(match node.as_str() {
-                //eq(field1,value1)
-                "eq" | "ge" | "gt" | "le" | "lt" | "ne" => {
-                    if !{ 0 == *nested_quantity } {
-                        self.process_error_message(format!(
-                            "Node `{}` should not have nested parentheses",
-                            node
-                        ));
-                        return false;
-                    }
-                    true
-                }
-
-                //eqf(field1)
-                "eqf" | "eqt" | "eqn" | "ie" => {
-                    if !{
-                        0 == *nested_quantity
-                            && inner_value.is_some()
-                            && 0 == inner_value
-                                .as_ref()
-                                .expect("We checked before")
-                                .matches(',')
-                                .count()
-                    } {
-                        self.process_error_message(
-                            format!("Node `{}` should not have nested parentheses, must contain a field, the field should not contain a comma", node),
-                        );
-                        return false;
-                    }
-                    true
-                }
-
-                //in(field1,(value1,value2))
-                "in" | "out" => {
-                    if !{ 1 == *nested_quantity } {
-                        self.process_error_message(format!(
-                            "Node `{}` should have 1 nested parentheses block",
-                            node
-                        ));
-                        return false;
-                    }
-                    true
-                }
-                //not(node1)
-                "not" => {
-                    if !{ 1 == *nested_quantity } {
-                        self.process_error_message(format!(
-                            "Node `{}` should have 1 nested node",
-                            node
-                        ));
-                        return false;
-                    }
-                    true
-                }
-                //and(node1,node2)
-                "and" | "or" => {
-                    if !{ 2 == *nested_quantity } {
-                        self.process_error_message(format!(
-                            "Node `{}` should have 2 nested nodes",
-                            node
-                        ));
-                        return false;
-                    }
-                    true
-                }
-                _ => inner_value.is_some() && *level > 1,
-            }) {
-                self.process_error_message(format!(
-                    "Block `{}` should have a value and be nested",
-                    node
-                ));
-                //println!("{:#?}", operators);
-                return false;
-            }
-        }
-        //println!("{:#?}", operators);
-        true
-    }
-
     fn add_nested_nodes_quantity(
         &self,
         operators: Vec<(String, Option<String>, usize)>,
@@ -191,7 +110,7 @@ impl RqlValidator {
                     let mut count_nested = 0;
                     for x in operators.iter() {
                         let (_, _, level) = x;
-                        if &target_level == level {
+                        if target_level == *level {
                             count_nested += 1;
                         }
                     }
@@ -202,6 +121,125 @@ impl RqlValidator {
             })
             .collect()
     }
+
+    fn is_operators_valid(&self, operators: Vec<(String, Option<String>, usize, usize)>) -> bool {
+        let result = || {
+            for x in operators.iter() {
+                let (node, inner_value, level, nested_quantity) = x;
+                if !(match node.as_str() {
+                    //operator exists(property)
+                    "exists" => {
+                        if !{
+                            0 == *nested_quantity
+                                && inner_value.is_some()
+                                && 0 == inner_value
+                                    .as_ref()
+                                    .expect("We checked few lines above")
+                                    .matches(',')
+                                    .count()
+                        } {
+                            self.process_error_message(
+                                format!("Operator `{}` should not contain nested parentheses, must have a property, the property should not contain a comma", node),
+                            );
+                            return false;
+                        }
+                        true
+                    }
+
+                    //comparison operators e.g., eq(property,value)
+                    "eq" | "ne" | "lt" | "gt" | "le" | "ge" => {
+                        if !{
+                            0 == *nested_quantity
+                                && inner_value.is_some()
+                                && 1 == inner_value
+                                    .as_ref()
+                                    .expect("We checked few lines above")
+                                    .matches(',')
+                                    .count()
+                        } {
+                            self.process_error_message(format!(
+                                "Operator `{}` should not contain nested parentheses, must have a property and a value",
+                                node
+                            ));
+                            return false;
+                        }
+                        true
+                    }
+
+                    //operator like(property,pattern)
+                    "like" => {
+                        if !{
+                            0 == *nested_quantity
+                                && inner_value.is_some()
+                                && 1 == inner_value
+                                    .as_ref()
+                                    .expect("We checked few lines above")
+                                    .matches(',')
+                                    .count()
+                        } {
+                            self.process_error_message(format!(
+                                "Operator `{}` should not contain nested parentheses, must have a property and a pattern",
+                                node
+                            ));
+                            return false;
+                        }
+                        true
+                    }
+
+                    //list operators e.g., in(property,(value1,...))
+                    "in" | "out" => {
+                        if !{ 1 == *nested_quantity } {
+                            self.process_error_message(format!(
+                                "Operator `{}` should have 1 nested parentheses block",
+                                node
+                            ));
+                            return false;
+                        }
+                        true
+                    }
+
+                    //logical operator not(query)
+                    "not" => {
+                        if !{ 1 == *nested_quantity } {
+                            self.process_error_message(format!(
+                                "Operator `{}` should have 1 nested query",
+                                node
+                            ));
+                            return false;
+                        }
+                        true
+                    }
+                    //other logical operators e.g., and(query1,query2,...)
+                    "and" | "or" => {
+                        if !{ 1 < *nested_quantity } {
+                            self.process_error_message(format!(
+                                "Operator `{}` should have at least 2 nested queries",
+                                node
+                            ));
+                            return false;
+                        }
+                        true
+                    }
+                    _ => inner_value.is_some() && *level > 1,
+                }) {
+                    self.process_error_message(format!(
+                        "Block `{}` should have a value and be nested",
+                        node
+                    ));
+                    return false;
+                }
+            }
+            true
+        };
+
+        let result = result();
+        /*
+        if !result {
+            println!("{:#?}", operators);
+        }
+        */
+        result
+    }
 }
 
 #[cfg(test)]
@@ -209,17 +247,104 @@ mod test {
     use super::*;
 
     #[test]
-    fn check_parentheses() {
-        let rql_validator = RqlValidator::new(None);
+    fn check_is_broken() {
+        let rql_validator: Box<dyn ValidatorInterface> = Box::new(RqlValidator::new(None));
 
-        let rql_statement = "eq(name,John)".to_owned();
+        let invalid_rql_statement = "))".to_owned();
+        assert!(!rql_validator.is_valid(invalid_rql_statement));
+    }
+
+    #[test]
+    fn check_is_error_message_exist() {
+        fn handle_error(error_message: String) {
+            assert!(!error_message.is_empty());
+        }
+
+        let rql_validator: Box<dyn ValidatorInterface> =
+            Box::new(RqlValidator::new(Some(handle_error)));
+
+        let invalid_rql_statement = "))".to_owned();
+        rql_validator.is_valid(invalid_rql_statement);
+    }
+
+    #[test]
+    fn check_valid() {
+        fn print_error(error_message: String) {
+            eprintln!("Error: -------------------------------- {}", error_message);
+        }
+
+        let rql_validator: Box<dyn ValidatorInterface> =
+            Box::new(RqlValidator::new(Some(print_error)));
+
+        let rql_statement = "exists(product.status)".to_owned();
         assert!(rql_validator.is_valid(rql_statement));
 
-        let rql_statement = "and(eq(name,John),eq(surname,Smith))".to_owned();
+        let rql_statement = "eq(product.status,new)".to_owned();
         assert!(rql_validator.is_valid(rql_statement));
 
-        let rql_statement = "or(and(eq(name,John),eq(surname,Smith)),eq(surname,Doe))".to_owned();
+        let rql_statement = "lt(product.createdAt,2022-11-25)".to_owned();
         assert!(rql_validator.is_valid(rql_statement));
+
+        let rql_statement = "like(product.name,*str*)".to_owned();
+        assert!(rql_validator.is_valid(rql_statement));
+
+        let rql_statement = "in(status,(new,processing))".to_owned();
+        assert!(rql_validator.is_valid(rql_statement));
+
+        let rql_statement = "in(status,(new))".to_owned();
+        assert!(rql_validator.is_valid(rql_statement));
+
+        let rql_statement = "and(eq(id,12),like(name,*str*))".to_owned();
+        assert!(rql_validator.is_valid(rql_statement));
+
+        let rql_statement = "and(eq(id,12),like(name,*str*),eq(name, John))".to_owned();
+        assert!(rql_validator.is_valid(rql_statement));
+
+        let rql_statement = "not(eq(product.name,astra))".to_owned();
+        assert!(rql_validator.is_valid(rql_statement));
+
+        let rql_statement = "status,new".to_owned();
+        assert!(rql_validator.is_valid(rql_statement));
+    }
+
+    #[test]
+    fn check_invalid() {
+        fn print_error(error_message: String) {
+            eprintln!("Error: -------------------------------- {}", error_message);
+        }
+
+        let rql_validator: Box<dyn ValidatorInterface> =
+            Box::new(RqlValidator::new(Some(print_error)));
+
+        let rql_statement = "exists(eq(product.status,new))".to_owned();
+        assert!(!rql_validator.is_valid(rql_statement));
+
+        let rql_statement = "eq(product.status)".to_owned();
+        assert!(!rql_validator.is_valid(rql_statement));
+
+        let rql_statement = "lt(product.createdAt,2022-11-25,20:38)".to_owned();
+        assert!(!rql_validator.is_valid(rql_statement));
+
+        let rql_statement = "like(product.name)".to_owned();
+        assert!(!rql_validator.is_valid(rql_statement));
+
+        let rql_statement = "in(status)".to_owned();
+        assert!(!rql_validator.is_valid(rql_statement));
+
+        let rql_statement = "in(status,(active),(new))".to_owned();
+        assert!(!rql_validator.is_valid(rql_statement));
+
+        let rql_statement = "and(eq(id,12))".to_owned();
+        assert!(!rql_validator.is_valid(rql_statement));
+
+        let rql_statement = "and(name, John)".to_owned();
+        assert!(!rql_validator.is_valid(rql_statement));
+
+        let rql_statement = "not(product.name,astra)".to_owned();
+        assert!(!rql_validator.is_valid(rql_statement));
+
+        let rql_statement = "unknown.operator(value)".to_owned();
+        assert!(!rql_validator.is_valid(rql_statement));
     }
 
     #[test]
@@ -300,118 +425,5 @@ mod test {
             rql_validator
                 .add_nested_nodes_quantity(rql_validator.get_operators(rql_statement).unwrap())
         );
-    }
-
-    #[test]
-    fn check_is_operators_valid() {
-        let rql_validator = RqlValidator::new(None);
-        let rql_statement = "not(in(name,(John,Jackson,Liam)))".to_owned();
-        let result = rql_validator
-            .add_nested_nodes_quantity(rql_validator.get_operators(rql_statement).unwrap());
-
-        assert!(rql_validator.is_operators_valid(result));
-    }
-
-    #[test]
-    fn check_error_message_handling() {
-        fn handle_error(error_message: String) {
-            assert!(!error_message.is_empty());
-        }
-
-        let rql_validator: Box<dyn ValidatorInterface> =
-            Box::new(RqlValidator::new(Some(handle_error)));
-
-        let invalid_rql_statement =
-            "and(eq(name,John),eq(surname,Doe),eq(surname,Smith))".to_owned();
-        rql_validator.is_valid(invalid_rql_statement);
-    }
-
-    #[test]
-    fn test_valid() {
-        let rql_validator = RqlValidator::new(None);
-
-        let rql_statement = "not(in(name,(John,Jackson,Liam)))".to_owned();
-        assert!(rql_validator.is_valid(rql_statement));
-
-        let rql_statement = "in(name,(John,Jackson,Liam))".to_owned();
-        assert!(rql_validator.is_valid(rql_statement));
-
-        let rql_statement = "out(name,(Grayson,Lucas))".to_owned();
-        assert!(rql_validator.is_valid(rql_statement));
-
-        let rql_statement = "and(eq(name,John),eq(surname,Smith))".to_owned();
-        assert!(rql_validator.is_valid(rql_statement));
-
-        let rql_statement = "or(eq(login,congrate),eq(name,John))".to_owned();
-        assert!(rql_validator.is_valid(rql_statement));
-
-        let rql_statement = "not(eq(id,1))".to_owned();
-        assert!(rql_validator.is_valid(rql_statement));
-
-        let rql_statement = "eqf(isActive)".to_owned();
-        assert!(rql_validator.is_valid(rql_statement));
-
-        let rql_statement = "eqt(isActive)".to_owned();
-        assert!(rql_validator.is_valid(rql_statement));
-
-        let rql_statement = "eqn(name)".to_owned();
-        assert!(rql_validator.is_valid(rql_statement));
-
-        let rql_statement = "ie(name)".to_owned();
-        assert!(rql_validator.is_valid(rql_statement));
-
-        let rql_statement = "eq(name,John)".to_owned();
-        assert!(rql_validator.is_valid(rql_statement));
-
-        let rql_statement = "ge(salary,500)".to_owned();
-        assert!(rql_validator.is_valid(rql_statement));
-
-        let rql_statement = "gt(salary,600)".to_owned();
-        assert!(rql_validator.is_valid(rql_statement));
-
-        let rql_statement = "le(salary,1000)".to_owned();
-        assert!(rql_validator.is_valid(rql_statement));
-
-        let rql_statement = "lt(salary,900)".to_owned();
-        assert!(rql_validator.is_valid(rql_statement));
-
-        let rql_statement = "ne(name,Jackson)".to_owned();
-        assert!(rql_validator.is_valid(rql_statement));
-    }
-
-    #[test]
-    fn test_not_valid() {
-        fn print_errors(error_message: String) {
-            eprintln!("{}", error_message);
-        }
-
-        let rql_validator = RqlValidator::new(Some(print_errors));
-
-        let rql_statement = "in(name,John,Jackson,Liam)".to_owned();
-        assert!(!rql_validator.is_valid(rql_statement));
-
-        let rql_statement = "in(name,())".to_owned();
-        assert!(!rql_validator.is_valid(rql_statement));
-
-        let rql_statement = "nonexistent(name)".to_owned();
-        assert!(!rql_validator.is_valid(rql_statement));
-
-        let rql_statement = "and(name,Smith)".to_owned();
-        assert!(!rql_validator.is_valid(rql_statement));
-
-        let rql_statement = "and(eq(name,John),eq(surname,Smith),eq(login,congrate))".to_owned();
-        assert!(!rql_validator.is_valid(rql_statement));
-
-        let rql_statement = "not(eq(login,congrate),eq(name,John))".to_owned();
-        assert!(!rql_validator.is_valid(rql_statement));
-
-        let rql_statement = "eqf()".to_owned();
-        assert!(!rql_validator.is_valid(rql_statement));
-
-        let rql_statement = "eqf(eq(name,John))".to_owned();
-        assert!(!rql_validator.is_valid(rql_statement));
-
-        let rql_statement = "eqf(isActive,isProcessable)".to_owned();
-        assert!(!rql_validator.is_valid(rql_statement));
     }
 }
