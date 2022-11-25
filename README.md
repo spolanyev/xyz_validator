@@ -1,7 +1,7 @@
 # About
 
-My Resource Query Language (RQL) validator published on [crates.io](https://crates.io/crates/xyz_validator).
+My Resource Query Language (RQL) validator published on [crates.io](https://crates.io/crates/xyz_validator)
 
-# Contacts
+Basic usage is [here](/CRATES.IO.md)
 
-Feel free to contact me at [spolanyev@gmail.com](mailto:spolanyev@gmail.com?subject=Rust%3A%20crates)
+If you are hiring, contact me at [spolanyev@gmail.com](mailto:spolanyev@gmail.com?subject=Rust%3A%20vacancy)
