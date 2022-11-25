@@ -29,7 +29,7 @@ impl RqlValidator {
 
     fn process_error_message(&self, message: &str) {
         if self.verbosity_manager.is_some() {
-            self.verbosity_manager.expect("We checked it already")(message);
+            self.verbosity_manager.expect("We checked it a line above")(message);
         }
     }
 
@@ -97,7 +97,7 @@ impl RqlValidator {
                 }
                 let last = result
                     .last_mut()
-                    .expect("We have at least operator before the value");
+                    .expect("We have at least an operator before the value");
                 *last = (last.0.clone(), Some(operator_content), last.2);
                 operator_content = "".to_owned();
             }
@@ -113,7 +113,7 @@ impl RqlValidator {
                 "eq" | "ge" | "gt" | "le" | "lt" | "ne" => {
                     if !{ 0 == *nested_quantity } {
                         self.process_error_message(
-                            format!("Node '{}' should not have nested parentheses", node).as_str(),
+                            format!("Node `{}` should not have nested parentheses", node).as_str(),
                         );
                         return false;
                     }
@@ -132,7 +132,7 @@ impl RqlValidator {
                                 .count()
                     } {
                         self.process_error_message(
-                            format!("Node '{}' should not have nested parentheses, must contain a field, the field should not contain a comma", node).as_str(),
+                            format!("Node `{}` should not have nested parentheses, must contain a field, the field should not contain a comma", node).as_str(),
                         );
                         return false;
                     }
@@ -143,7 +143,7 @@ impl RqlValidator {
                 "in" | "out" => {
                     if !{ 1 == *nested_quantity } {
                         self.process_error_message(
-                            format!("Node '{}' should have 1 nested parentheses block", node)
+                            format!("Node `{}` should have 1 nested parentheses block", node)
                                 .as_str(),
                         );
                         return false;
@@ -154,7 +154,7 @@ impl RqlValidator {
                 "not" => {
                     if !{ 1 == *nested_quantity } {
                         self.process_error_message(
-                            format!("Node '{}' should have 1 nested node", node).as_str(),
+                            format!("Node `{}` should have 1 nested node", node).as_str(),
                         );
                         return false;
                     }
@@ -164,16 +164,16 @@ impl RqlValidator {
                 "and" | "or" => {
                     if !{ 2 == *nested_quantity } {
                         self.process_error_message(
-                            format!("Node '{}' should have 2 nested nodes", node).as_str(),
+                            format!("Node `{}` should have 2 nested nodes", node).as_str(),
                         );
                         return false;
                     }
                     true
                 }
-                _ => inner_value.is_some() && level > &1,
+                _ => inner_value.is_some() && *level > 1,
             }) {
                 self.process_error_message(
-                    format!("Block '{}' should have a value and be nested", node).as_str(),
+                    format!("Block `{}` should have a value and be nested", node).as_str(),
                 );
                 //println!("{:#?}", operators);
                 return false;
