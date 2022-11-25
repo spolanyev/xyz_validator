@@ -6,7 +6,7 @@ use std::collections::HashMap;
 pub struct RqlValidator {
     closing_parts: HashMap<char, char>,
     opening_parts: HashMap<char, char>,
-    verbosity_manager: Option<fn(&str)>,
+    verbosity_manager: Option<fn(String)>,
 }
 
 impl ValidatorInterface for RqlValidator {
@@ -23,7 +23,7 @@ impl ValidatorInterface for RqlValidator {
 }
 
 impl RqlValidator {
-    pub fn new(verbosity_manager: Option<fn(&str)>) -> Self {
+    pub fn new(verbosity_manager: Option<fn(String)>) -> Self {
         Self {
             closing_parts: HashMap::from([('(', ')')]),
             opening_parts: HashMap::from([(')', '(')]),
@@ -31,7 +31,7 @@ impl RqlValidator {
         }
     }
 
-    fn process_error_message(&self, message: &str) {
+    fn process_error_message(&self, message: String) {
         if self.verbosity_manager.is_some() {
             self.verbosity_manager.expect("We checked it a line above")(message);
         }
@@ -40,7 +40,7 @@ impl RqlValidator {
     fn get_operators(
         &self,
         rql_statement: String,
-    ) -> Result<Vec<(String, Option<String>, usize)>, &str> {
+    ) -> Result<Vec<(String, Option<String>, usize)>, String> {
         let mut result: Vec<(String, Option<String>, usize)> = vec![];
 
         let mut stack = vec![];
@@ -73,7 +73,7 @@ impl RqlValidator {
             //closing detected
             if self.opening_parts.get(&char).is_some() {
                 if stack.pop() != Some(&char) {
-                    return Err("Invalid closing parentheses count");
+                    return Err("Invalid closing parentheses count".to_owned());
                 }
                 level -= 1;
                 operator = "".to_owned();
@@ -91,7 +91,7 @@ impl RqlValidator {
         }
 
         if !stack.is_empty() {
-            return Err("Invalid opening parentheses count");
+            return Err("Invalid opening parentheses count".to_owned());
         }
 
         Ok(result)
@@ -104,9 +104,10 @@ impl RqlValidator {
                 //eq(field1,value1)
                 "eq" | "ge" | "gt" | "le" | "lt" | "ne" => {
                     if !{ 0 == *nested_quantity } {
-                        self.process_error_message(
-                            format!("Node `{}` should not have nested parentheses", node).as_str(),
-                        );
+                        self.process_error_message(format!(
+                            "Node `{}` should not have nested parentheses",
+                            node
+                        ));
                         return false;
                     }
                     true
@@ -124,7 +125,7 @@ impl RqlValidator {
                                 .count()
                     } {
                         self.process_error_message(
-                            format!("Node `{}` should not have nested parentheses, must contain a field, the field should not contain a comma", node).as_str(),
+                            format!("Node `{}` should not have nested parentheses, must contain a field, the field should not contain a comma", node),
                         );
                         return false;
                     }
@@ -134,10 +135,10 @@ impl RqlValidator {
                 //in(field1,(value1,value2))
                 "in" | "out" => {
                     if !{ 1 == *nested_quantity } {
-                        self.process_error_message(
-                            format!("Node `{}` should have 1 nested parentheses block", node)
-                                .as_str(),
-                        );
+                        self.process_error_message(format!(
+                            "Node `{}` should have 1 nested parentheses block",
+                            node
+                        ));
                         return false;
                     }
                     true
@@ -145,9 +146,10 @@ impl RqlValidator {
                 //not(node1)
                 "not" => {
                     if !{ 1 == *nested_quantity } {
-                        self.process_error_message(
-                            format!("Node `{}` should have 1 nested node", node).as_str(),
-                        );
+                        self.process_error_message(format!(
+                            "Node `{}` should have 1 nested node",
+                            node
+                        ));
                         return false;
                     }
                     true
@@ -155,18 +157,20 @@ impl RqlValidator {
                 //and(node1,node2)
                 "and" | "or" => {
                     if !{ 2 == *nested_quantity } {
-                        self.process_error_message(
-                            format!("Node `{}` should have 2 nested nodes", node).as_str(),
-                        );
+                        self.process_error_message(format!(
+                            "Node `{}` should have 2 nested nodes",
+                            node
+                        ));
                         return false;
                     }
                     true
                 }
                 _ => inner_value.is_some() && *level > 1,
             }) {
-                self.process_error_message(
-                    format!("Block `{}` should have a value and be nested", node).as_str(),
-                );
+                self.process_error_message(format!(
+                    "Block `{}` should have a value and be nested",
+                    node
+                ));
                 //println!("{:#?}", operators);
                 return false;
             }
@@ -309,6 +313,20 @@ mod test {
     }
 
     #[test]
+    fn check_error_message_handling() {
+        fn handle_error(error_message: String) {
+            assert!(!error_message.is_empty());
+        }
+
+        let rql_validator: Box<dyn ValidatorInterface> =
+            Box::new(RqlValidator::new(Some(handle_error)));
+
+        let invalid_rql_statement =
+            "and(eq(name,John),eq(surname,Doe),eq(surname,Smith))".to_owned();
+        rql_validator.is_valid(invalid_rql_statement);
+    }
+
+    #[test]
     fn test_valid() {
         let rql_validator = RqlValidator::new(None);
 
@@ -363,7 +381,7 @@ mod test {
 
     #[test]
     fn test_not_valid() {
-        fn print_errors(error_message: &str) {
+        fn print_errors(error_message: String) {
             eprintln!("{}", error_message);
         }
 

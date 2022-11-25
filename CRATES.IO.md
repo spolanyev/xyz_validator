@@ -8,8 +8,8 @@ fn main() {
     let rql_validator: Box<dyn ValidatorInterface> = Box::new(RqlValidator::new(None));
     assert!(rql_validator.is_valid(valid_rql_statement));
 
-    //to view errors we should define a callback function for `&str` argument
-    fn your_handle_error_function(your_var: &str) {
+    //to view errors we should define a callback function for `String` argument
+    fn your_handle_error_function(your_var: String) {
         eprintln!("{}", your_var);
     }
 
